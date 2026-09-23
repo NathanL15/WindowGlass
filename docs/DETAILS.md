@@ -158,6 +158,9 @@ Settings: `TimerColor` + `TimerTint` (blend toward the accent, 0.6 = soft orange
 | ShowPercentInside | 1 | iOS "battery percentage" style: filled body, bold black digits (white only on the plain black body over bright backdrops) |
 | HideOnFullscreen | 1 | hide while a fullscreen app is in front |
 | MediaIsland | 1 | expand with album art + audio bars while media plays |
+| Size | 1.0 | overall size multiplier on top of the DPI scale |
+| SizeMatchPhysical | 1 | same physical size on every screen: the scale is multiplied by the primary display's logical pixels per mm relative to SizeReference (a 27" 1440p monitor at 100% would otherwise show it ~25% larger than the laptop panel) |
+| SizeReference | 5.6 | logical px per mm the layout was designed on (the laptop panel: 2944 px over 302 mm at 175%); lower makes it bigger everywhere |
 | MediaLocalOnly | 1 | ignore a player that only remote-controls another device (Spotify Connect): its audio session on this PC must be active and carrying signal |
 | ArtSize / BarWidth / BarGap / BarMaxHeight / BarCount / ExpandMs / EdgePad | 19 / 2.6 / 1.5 / 15 / 5 / 260 / 6 | island geometry (DIP; art and bar block are both ArtSize squares), expansion time, art/bar distance from the capsule edge |
 | HoverOpacity / HoverFadeMs | 0.25 / 70 | fades to this while the mouse is over it, in the gap to the screen edge, or within that same distance on the other sides (clicks always pass through) |

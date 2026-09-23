@@ -31,6 +31,7 @@ static class Native {
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int hh, uint f);
     [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr h);
+    [DllImport("gdi32.dll")] public static extern int GetDeviceCaps(IntPtr dc, int index);
     [DllImport("user32.dll")] public static extern bool SetWindowDisplayAffinity(IntPtr h, uint a);
     [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr h);
     [DllImport("user32.dll")] public static extern int ReleaseDC(IntPtr h, IntPtr dc);
@@ -101,6 +102,9 @@ class Config {
     public bool ShowPercentInside = true;
     public bool HideOnFullscreen = true;
     public bool MediaIsland = true;        // expand with album art + audio bars while media plays
+    public double Size = 1.0;              // overall size multiplier on top of the DPI scale
+    public bool SizeMatchPhysical = true;  // keep the capsule the same physical size on every screen (a 27" 1440p monitor at 100% would otherwise show it ~25% larger than the laptop panel)
+    public double SizeReference = 5.6;     // logical pixels per mm the sizes were designed on (the laptop panel: 2944 px / 302 mm at 175%)
     public bool MediaLocalOnly = true;     // ignore a player that is only remote-controlling another device (Spotify Connect): the app must be rendering audio here
     public double ArtSize = 19, BarWidth = 2.6, BarGap = 1.5, BarMaxHeight = 15, EdgePad = 6;   // DIP; EdgePad = art/bars distance from the capsule edge
     public int BarCount = 5, ExpandMs = 260;
@@ -187,6 +191,9 @@ class Config {
                     case "hideonfullscreen": c.HideOnFullscreen = Bool(v); break;
                     case "mediaisland": c.MediaIsland = Bool(v); break;
                     case "medialocalonly": c.MediaLocalOnly = Bool(v); break;
+                    case "size": c.Size = Clamp(Dbl(v), 0.4, 2.5); break;
+                    case "sizematchphysical": c.SizeMatchPhysical = Bool(v); break;
+                    case "sizereference": c.SizeReference = Clamp(Dbl(v), 1, 20); break;
                     case "artsize": c.ArtSize = Dbl(v); break;
                     case "edgepad": c.EdgePad = Dbl(v); break;
                     case "barwidth": c.BarWidth = Dbl(v); break;
@@ -278,6 +285,9 @@ class Config {
 "HideOnFullscreen=1\r\n" +
 "MediaIsland=1        # expand with album art + audio bars while media plays\r\n" +
 "MediaLocalOnly=1     # ignore a player that only remote-controls another device (Spotify Connect): it must play audio on this PC\r\n" +
+"Size=1.0             # overall size multiplier\r\n" +
+"SizeMatchPhysical=1  # same physical size on every screen (scaled by the monitor's pixel density relative to SizeReference)\r\n" +
+"SizeReference=5.6    # logical px per mm the layout was designed on (the laptop panel); lower = bigger everywhere\r\n" +
 "ArtSize=19\r\n" +
 "BarWidth=2.6\r\n" +
 "BarGap=1.5\r\n" +
@@ -948,13 +958,25 @@ unsafe class Overlay : Form {
         return false;
     }
 
-    double Scale { get { return Native.GetDpiForWindow(Handle) / 96.0; } }
+    double sizeFactor = 1.0;
+    double Scale { get { return Native.GetDpiForWindow(Handle) / 96.0 * sizeFactor; } }
+    void RefreshSizeFactor() {   // logical px per mm of the primary display vs the reference panel, clamped so a bad EDID cannot make it silly
+        double f = cfg.Size;
+        if (cfg.SizeMatchPhysical) {
+            try {
+                IntPtr dc = Native.GetDC(IntPtr.Zero); int mm = Native.GetDeviceCaps(dc, 4), px = Native.GetDeviceCaps(dc, 8); Native.ReleaseDC(IntPtr.Zero, dc);
+                double dpi = Native.GetDpiForWindow(Handle) / 96.0;
+                if (mm > 50 && px > 100) f *= Math.Max(0.5, Math.Min(1.6, (px / (double)mm) / dpi / cfg.SizeReference));
+            } catch { }
+        }
+        if (Math.Abs(f - sizeFactor) > 0.001) { sizeFactor = f; tKey = ""; geomKey = ""; digitsW = -1; }
+    }
 
     void Relayout(Model m, bool force) {
         bool same = !force && m.SameAs(model);
         model = m; if (same) return;
+        screenW = Screen.PrimaryScreen.Bounds.Width; screenH = Screen.PrimaryScreen.Bounds.Height; RefreshSizeFactor();
         if (animatingExpand) { Wake(); return; }   // mid-animation: the next animation frame re-lays out anyway; no double render under the lock
-        screenW = Screen.PrimaryScreen.Bounds.Width; screenH = Screen.PrimaryScreen.Bounds.Height;
         lock (sync) RenderContent();
         Wake();
     }
