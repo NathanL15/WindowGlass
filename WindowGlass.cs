@@ -28,6 +28,8 @@ static class Native {
     [DllImport("user32.dll")] public static extern int SetWindowLong(IntPtr h, int i, int v);
     [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int vk);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int hh, uint f);
     [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr h);
@@ -534,6 +536,21 @@ static class MediaSource {
         sn.MediaPropertiesChanged += (a, b) => Changed.Set();
         sn.TimelinePropertiesChanged += (a, b) => Changed.Set();
     }
+    // click on the cover: bring the player to the front (or launch it). Spotify by window, anything else through its app id.
+    public static void OpenApp() {
+        string app = ""; try { var s = cur; if (s != null) app = s.SourceAppUserModelId ?? ""; } catch { }
+        string low = app.ToLowerInvariant();
+        try {
+            if (low.Contains("spotify")) {
+                foreach (var pr in System.Diagnostics.Process.GetProcessesByName("Spotify")) {
+                    IntPtr h = pr.MainWindowHandle;
+                    if (h != IntPtr.Zero) { if (Native.IsIconic(h)) Native.ShowWindow(h, 9 /*SW_RESTORE*/); else Native.ShowWindow(h, 5 /*SW_SHOW*/); Native.SetForegroundWindow(h); return; }
+                }
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("spotify:") { UseShellExecute = true }); return;   // tray-only or not running: the URI opens/launches it
+            }
+            if (app.Length > 0) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", "shell:AppsFolder\\" + app) { UseShellExecute = true });
+        } catch { }
+    }
     public static void TogglePlayPause() { try { var mgr = Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager.RequestAsync().AsTask().GetAwaiter().GetResult(); var s = mgr.GetCurrentSession(); if (s != null) s.TryTogglePlayPauseAsync().AsTask().GetAwaiter().GetResult(); } catch { } }
     public static void Next() { try { var mgr = Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager.RequestAsync().AsTask().GetAwaiter().GetResult(); var s = mgr.GetCurrentSession(); if (s != null) s.TrySkipNextAsync().AsTask().GetAwaiter().GetResult(); } catch { } }
     public static void Prev() { try { var mgr = Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager.RequestAsync().AsTask().GetAwaiter().GetResult(); var s = mgr.GetCurrentSession(); if (s != null) s.TrySkipPreviousAsync().AsTask().GetAwaiter().GetResult(); } catch { } }
@@ -822,7 +839,7 @@ unsafe class Overlay : Form {
         if (m.Msg == 0x8000 + 8) { ClaudeStatus.Refresh(); Wake(); return; }
         if (m.Msg == WM_APP_CMD) { try { if (File.Exists(cmdFile)) { foreach (var line in File.ReadAllLines(cmdFile)) Clocks.Apply(line); File.Delete(cmdFile); } } catch { } Wake(); return; }
         if (m.Msg == 0x84) { m.Result = captureOn ? (IntPtr)1 /*HTCLIENT*/ : (IntPtr)(-1); return; }
-        if (m.Msg == 0x0202 && captureOn) { int z = hitZone; new Thread(() => { if (z == 2) MediaSource.Prev(); else if (z == 4) MediaSource.Next(); else MediaSource.TogglePlayPause(); }) { IsBackground = true }.Start(); return; }   // click: cover/play = toggle, prev, next
+        if (m.Msg == 0x0202 && captureOn) { int z = hitZone; new Thread(() => { if (z == 2) MediaSource.Prev(); else if (z == 4) MediaSource.Next(); else if (z == 1) MediaSource.OpenApp(); else MediaSource.TogglePlayPause(); }) { IsBackground = true }.Start(); return; }   // click: cover/play = toggle, prev, next
         if (m.Msg == 0x0205 && captureOn) { new Thread(() => MediaSource.Next()) { IsBackground = true }.Start(); return; }                      // right click: next track
         if (m.Msg == 0x0208 && captureOn) { new Thread(() => MediaSource.Prev()) { IsBackground = true }.Start(); return; }                      // middle click: previous
         if (m.Msg == 0x020A && captureOn) { int d = (short)((m.WParam.ToInt64() >> 16) & 0xFFFF); float step = 0.02f * (d / 120f); new Thread(() => MediaSource.VolumeStep(step)) { IsBackground = true }.Start(); return; }   // wheel: volume
