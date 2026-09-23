@@ -1,4 +1,4 @@
-# TrayGlass
+# WindowGlass
 
 My own dynamic island for Windows. It's a small liquid glass pill at the top of the screen with the clock and battery, and it expands when Spotify is playing to show the album art and some audio bars. Hover it and you get the track, a progress bar and play/skip buttons. It also does a stopwatch and a countdown timer, and shows a little pixel Claude when a Claude Code session is working or needs me. Mic and camera dots too.
 
