@@ -1,4 +1,4 @@
-// TrayGlass: a small floating liquid-glass capsule in the bottom-right corner showing the time and an Apple-style
+// WindowGlass: a small floating liquid-glass capsule in the bottom-right corner showing the time and an Apple-style
 // battery (percentage inside the body). Shown while the auto-hide taskbar is hidden; mouse input passes through.
 //
 // The glass is real: the window is excluded from screen capture (WDA_EXCLUDEFROMCAPTURE), so a BitBlt of the screen
@@ -228,7 +228,7 @@ class Config {
     static double Clamp(double x, double a, double b) { return x < a ? a : x > b ? b : x; }
     public static Color Col(string s, Color dflt) { try { return ColorTranslator.FromHtml(s); } catch { return dflt; } }
     public const string Template =
-"# TrayGlass settings. Right-click the TrayGlass icon in the hidden-icons flyout > Reload config after editing.\r\n" +
+"# WindowGlass settings. Right-click the WindowGlass icon in the hidden-icons flyout > Reload config after editing.\r\n" +
 "# glass\r\n" +
 "BlurRadius=4         # DIP, keep small so the background stays readable\r\n" +
 "Saturation=1.4       # backdrop colour boost\r\n" +
@@ -392,10 +392,10 @@ static class Privacy {
     }
 }
 
-// Claude Code sessions, fed by hooks: "TrayGlass.exe --hook <event>" reads the hook JSON on stdin and records the
-// session's state in %LOCALAPPDATA%\TrayGlass\claude.txt (one "session|state|utcTicks" per line).
+// Claude Code sessions, fed by hooks: "WindowGlass.exe --hook <event>" reads the hook JSON on stdin and records the
+// session's state in %LOCALAPPDATA%\WindowGlass\claude.txt (one "session|state|utcTicks" per line).
 static class ClaudeStatus {
-    public static string File_ { get { var d = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TrayGlass"); Directory.CreateDirectory(d); return Path.Combine(d, "claude.txt"); } }
+    public static string File_ { get { var d = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WindowGlass"); Directory.CreateDirectory(d); return Path.Combine(d, "claude.txt"); } }
     public static int State;   // 0 none, 1 idle session, 2 working, 3 attention
     public static void Record(string evt, string json) {
         string sid = Extract(json, "session_id"); if (string.IsNullOrEmpty(sid)) sid = "?";
@@ -429,7 +429,7 @@ static class ClaudeStatus {
         try {
             if (File.Exists(File_)) foreach (var l in File.ReadAllLines(File_)) {
                 var parts = l.Split('|'); if (parts.Length < 3) continue; long t; if (!long.TryParse(parts[2], out t)) continue;
-                string only = Environment.GetEnvironmentVariable("TRAYGLASS_CLAUDE_ONLY"); if (!string.IsNullOrEmpty(only) && parts[0] != only) continue;
+                string only = Environment.GetEnvironmentVariable("WINDOWGLASS_CLAUDE_ONLY"); if (!string.IsNullOrEmpty(only) && parts[0] != only) continue;
                 double age = (DateTime.UtcNow - new DateTime(t)).TotalMinutes; string state = parts[1];
                 if (state == "attention" && parts.Length > 3 && parts[3].Length > 0) {   // answered without a prompt (AskUserQuestion, permission dialog): the transcript moves on, the alert is over
                     try { var mt = File.GetLastWriteTimeUtc(parts[3]); if (File.Exists(parts[3]) && (mt - new DateTime(t)).TotalSeconds > 2) { state = "working"; age = (DateTime.UtcNow - mt).TotalMinutes; } } catch { }
@@ -441,7 +441,7 @@ static class ClaudeStatus {
     }
 }
 
-// Stopwatch and countdown timer owned by TrayGlass (the Windows Clock app keeps its own state private).
+// Stopwatch and countdown timer owned by WindowGlass (the Windows Clock app keeps its own state private).
 static class Clocks {
     static readonly object L = new object();
     static bool swRunning; static DateTime swStart; static TimeSpan swAccum;
@@ -630,7 +630,7 @@ class AudioTap {
         Array.Clear(env, 0, env.Length); Array.Clear(pos, 0, pos.Length);
     }
     readonly float[] smooth = new float[6], vel = new float[6], tgt = new float[6]; static readonly float[] eq = { 0.55f, 0.75f, 1.0f, 1.2f, 1.45f, 1.7f }; float agc = 0.02f; readonly Random rnd = new Random();
-    public void Start() { if (running) return; running = true; th = new Thread(Loop) { IsBackground = true, Name = "TrayGlass audio" }; th.SetApartmentState(ApartmentState.MTA); th.Start(); }
+    public void Start() { if (running) return; running = true; th = new Thread(Loop) { IsBackground = true, Name = "WindowGlass audio" }; th.SetApartmentState(ApartmentState.MTA); th.Start(); }
     public void Stop() { running = false; }
     void Loop() {
         try {
@@ -771,14 +771,14 @@ unsafe class Overlay : Form {
 
     public Overlay(string cfgPath) {
         this.cfgPath = cfgPath; cfg = Config.Load(cfgPath);
-        Text = "TrayGlass";
+        Text = "WindowGlass";
         FormBorderStyle = FormBorderStyle.None; TopMost = true; ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual; Bounds = new Rectangle(-10, -10, 1, 1);
 
         Icon appIcon = SystemIcons.Application;
-        try { string ico = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TrayGlass.ico"); appIcon = File.Exists(ico) ? new Icon(ico, 32, 32) : Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
+        try { string ico = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WindowGlass.ico"); appIcon = File.Exists(ico) ? new Icon(ico, 32, 32) : Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
         Icon = appIcon;
-        tray = new NotifyIcon { Text = "TrayGlass", Icon = appIcon, Visible = true };
+        tray = new NotifyIcon { Text = "WindowGlass", Icon = appIcon, Visible = true };
         var menu = new ContextMenuStrip();
         menu.Items.Add("Reload config", null, (s, e) => Reload());
         menu.Items.Add("Open config", null, (s, e) => { if (!File.Exists(cfgPath)) File.WriteAllText(cfgPath, Config.Template); System.Diagnostics.Process.Start("notepad.exe", cfgPath); });
@@ -794,7 +794,7 @@ unsafe class Overlay : Form {
         tm.DropDownItems.Add("Cancel", null, (s, e) => Clocks.TimerCancel());
         menu.Items.Add(tm);
         menu.Items.Add("Exit", null, (s, e) => Close());
-        cmdFile = Path.Combine(Path.GetDirectoryName(cfgPath), "TrayGlass.cmd");
+        cmdFile = Path.Combine(Path.GetDirectoryName(cfgPath), "WindowGlass.cmd");
         tray.ContextMenuStrip = menu;
         pollTimer = new System.Windows.Forms.Timer { Interval = 25 }; pollTimer.Tick += (s, e) => Poll();
     }
@@ -817,12 +817,12 @@ unsafe class Overlay : Form {
         base.WndProc(ref m);
     }
     void AskTimer() {
-        string v = Microsoft.VisualBasic.Interaction.InputBox("Timer length (minutes, or e.g. 90s, 1.5h). Empty cancels the timer.", "TrayGlass timer", "10");
+        string v = Microsoft.VisualBasic.Interaction.InputBox("Timer length (minutes, or e.g. 90s, 1.5h). Empty cancels the timer.", "WindowGlass timer", "10");
         if (v == null) return; v = v.Trim(); if (v.Length == 0) { Clocks.TimerCancel(); return; }
         if (!Clocks.Apply("--timer " + v)) Clocks.Apply("--timer " + v + "m");
     }
     protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); LoadFonts();
-        if (cfg.Hotkeys) { Native.RegisterHotKey(Handle, 1, 0x0002 | 0x0001, 0x53); Native.RegisterHotKey(Handle, 2, 0x0002 | 0x0001 | 0x0004, 0x53); Native.RegisterHotKey(Handle, 3, 0x0002 | 0x0001, 0x4D); } if (Environment.GetEnvironmentVariable("TRAYGLASS_CAPTURABLE") != "1") Native.SetWindowDisplayAffinity(Handle, 0x11 /*WDA_EXCLUDEFROMCAPTURE: screen grabs see through us*/); }
+        if (cfg.Hotkeys) { Native.RegisterHotKey(Handle, 1, 0x0002 | 0x0001, 0x53); Native.RegisterHotKey(Handle, 2, 0x0002 | 0x0001 | 0x0004, 0x53); Native.RegisterHotKey(Handle, 3, 0x0002 | 0x0001, 0x4D); } if (Environment.GetEnvironmentVariable("WINDOWGLASS_CAPTURABLE") != "1") Native.SetWindowDisplayAffinity(Handle, 0x11 /*WDA_EXCLUDEFROMCAPTURE: screen grabs see through us*/); }
     protected override void OnShown(EventArgs e) {
         base.OnShown(e);
         Native.ShowWindow(Handle, 0);
@@ -838,7 +838,7 @@ unsafe class Overlay : Form {
     public static double[] stage = new double[16]; static System.Diagnostics.Stopwatch psw = new System.Diagnostics.Stopwatch();
     static void Mark(int i) { stage[i] += psw.Elapsed.TotalMilliseconds; psw.Restart(); }
     bool hiRes;
-    static readonly bool dbgAnim = Environment.GetEnvironmentVariable("TRAYGLASS_DEBUG") == "1"; readonly System.Text.StringBuilder animLog = new System.Text.StringBuilder();
+    static readonly bool dbgAnim = Environment.GetEnvironmentVariable("WINDOWGLASS_DEBUG") == "1"; readonly System.Text.StringBuilder animLog = new System.Text.StringBuilder();
     bool heldSync; volatile bool frameReady; DateTime lastDump = DateTime.MinValue, lastDump2 = DateTime.MinValue; readonly double[] st0 = new double[16];
     void GlassLoop() {
         var sw = new System.Diagnostics.Stopwatch();
@@ -859,7 +859,7 @@ unsafe class Overlay : Form {
                 { double dt2 = playingNow ? 1 : cfg.PauseDim; if (Math.Abs(mediaDim - dt2) > 0.001) { double stp = now / 0.25; mediaDim = mediaDim < dt2 ? Math.Min(dt2, mediaDim + stp) : Math.Max(dt2, mediaDim - stp); dirty = true; needRelayout = true; } }
                 bool timerOn = Clocks.TimerActive, swOn = Clocks.StopwatchActive, clockOn = timerOn || swOn;
                 if (cfg.PrivacyDots) Privacy.RefreshAsync(); if (cfg.ClaudeStatus && (tick % 60) == 0) ClaudeStatus.Refresh();
-                int fakeStatus = 0; int.TryParse(Environment.GetEnvironmentVariable("TRAYGLASS_FAKESTATUS") ?? "0", out fakeStatus);
+                int fakeStatus = 0; int.TryParse(Environment.GetEnvironmentVariable("WINDOWGLASS_FAKESTATUS") ?? "0", out fakeStatus);
                 int wantStatus = fakeStatus | (cfg.ClaudeStatus && ClaudeStatus.State >= 2 ? 1 : 0) | (cfg.PrivacyDots && Privacy.MicInUse ? 2 : 0) | (cfg.PrivacyDots && Privacy.CamInUse ? 4 : 0);
                 if ((wantStatus & 4) != 0) wantStatus &= ~2;   // camera implies the mic: the green dot alone
                 bool statusOn = wantStatus != 0;
@@ -899,7 +899,7 @@ unsafe class Overlay : Form {
             }
             bool fast = (expand > 0 || animatingExpand) && cfg.MediaIsland; tick++;
             if (shown) {
-                try { lock (sync) { produced = Compose(dirty); dirty = false; if (produced) frameReady = true; } } catch (Exception ex) { if (Environment.GetEnvironmentVariable("TRAYGLASS_DEBUG") == "1") try { File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dev", "compose_err.txt"), ex.ToString()); } catch { } }
+                try { lock (sync) { produced = Compose(dirty); dirty = false; if (produced) frameReady = true; } } catch (Exception ex) { if (Environment.GetEnvironmentVariable("WINDOWGLASS_DEBUG") == "1") try { File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dev", "compose_err.txt"), ex.ToString()); } catch { } }
                 if (produced) try { lock (sync) Push(frame); } catch { }
             }
             if (heldSync) { heldSync = false; Monitor.Exit(sync); }
@@ -917,9 +917,9 @@ unsafe class Overlay : Form {
             try {
                 if (n++ % 5 == 0) uiaSaver = ReadSaverFromTaskbar();
                 if (cfg.MediaIsland) {
-                    if (Environment.GetEnvironmentVariable("TRAYGLASS_FAKEMEDIA") == "1") { if (media == null || media.Key != "fake") { var art = new Bitmap(64, 64); using (var g = Graphics.FromImage(art)) using (var lg = new LinearGradientBrush(new Rectangle(0, 0, 64, 64), Color.FromArgb(255, 60, 200), Color.FromArgb(30, 120, 255), 45f)) { g.FillRectangle(lg, 0, 0, 64, 64); g.FillEllipse(Brushes.White, 18, 18, 28, 28); } media = new MediaState { Playing = true, Key = "fake", Art = art, Title = "Fake Song Title", Artist = "Fake Artist", Position = 42, Duration = 200, PosAt = DateTime.UtcNow }; }
-                        if (Environment.GetEnvironmentVariable("TRAYGLASS_FAKEPAUSE") == "1") { bool ply = ((DateTime.UtcNow.Ticks / TimeSpan.TicksPerSecond) % 16) < 6; media = new MediaState { Playing = ply, Paused = !ply, Key = "fake", Art = media.Art, Title = media.Title, Artist = media.Artist, Position = 42, Duration = 200, PosAt = DateTime.UtcNow }; } }
-                    else if (Environment.GetEnvironmentVariable("TRAYGLASS_NOMEDIA") == "1") media = null;
+                    if (Environment.GetEnvironmentVariable("WINDOWGLASS_FAKEMEDIA") == "1") { if (media == null || media.Key != "fake") { var art = new Bitmap(64, 64); using (var g = Graphics.FromImage(art)) using (var lg = new LinearGradientBrush(new Rectangle(0, 0, 64, 64), Color.FromArgb(255, 60, 200), Color.FromArgb(30, 120, 255), 45f)) { g.FillRectangle(lg, 0, 0, 64, 64); g.FillEllipse(Brushes.White, 18, 18, 28, 28); } media = new MediaState { Playing = true, Key = "fake", Art = art, Title = "Fake Song Title", Artist = "Fake Artist", Position = 42, Duration = 200, PosAt = DateTime.UtcNow }; }
+                        if (Environment.GetEnvironmentVariable("WINDOWGLASS_FAKEPAUSE") == "1") { bool ply = ((DateTime.UtcNow.Ticks / TimeSpan.TicksPerSecond) % 16) < 6; media = new MediaState { Playing = ply, Paused = !ply, Key = "fake", Art = media.Art, Title = media.Title, Artist = media.Artist, Position = 42, Duration = 200, PosAt = DateTime.UtcNow }; } }
+                    else if (Environment.GetEnvironmentVariable("WINDOWGLASS_NOMEDIA") == "1") media = null;
                     else { try { MediaSource.LocalOnly = cfg.MediaLocalOnly; media = MediaSource.Read(media); } catch { } }
                 } else media = null;
                 Clocks.DoneSound = string.IsNullOrEmpty(cfg.DoneSound) ? "" : Path.IsPathRooted(cfg.DoneSound) ? cfg.DoneSound : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, cfg.DoneSound); Clocks.Tick(cfg.DoneShowMs);
@@ -1675,7 +1675,7 @@ unsafe class Overlay : Form {
             var src = new Native.POINT { X = 0, Y = 0 }; var dst = new Native.POINT { X = winX, Y = winY };
             var bl = new Native.BLEND { op = 0, flags = 0, alpha = (byte)Math.Round(255 * cfg.Opacity * fade * (1 - hover * (1 - cfg.HoverOpacity))), fmt = 1 };
             bool ok = Native.UpdateLayeredWindow(Handle, screenDc, ref dst, ref sz, pushDc, ref src, 0, ref bl, 2);
-            if (Environment.GetEnvironmentVariable("TRAYGLASS_DEBUG") == "1" && (!ok || (pushN++ % 60) == 0)) try { File.AppendAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dev", "push.txt"), DateTime.Now.ToString("HH:mm:ss.fff") + " ulw=" + ok + " err=" + Marshal.GetLastWin32Error() + " alpha=" + bl.alpha + " dst=" + dst.X + "," + dst.Y + " size=" + sz.W + "x" + sz.H + " fade=" + fade + " hover=" + hover + "\n"); } catch { }
+            if (Environment.GetEnvironmentVariable("WINDOWGLASS_DEBUG") == "1" && (!ok || (pushN++ % 60) == 0)) try { File.AppendAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dev", "push.txt"), DateTime.Now.ToString("HH:mm:ss.fff") + " ulw=" + ok + " err=" + Marshal.GetLastWin32Error() + " alpha=" + bl.alpha + " dst=" + dst.X + "," + dst.Y + " size=" + sz.W + "x" + sz.H + " fade=" + fade + " hover=" + hover + "\n"); } catch { }
         } finally { Native.ReleaseDC(IntPtr.Zero, screenDc); }
         stage[6] += pushSw.Elapsed.TotalMilliseconds;
         if (dbgAnim && (DateTime.UtcNow - lastDump2).TotalSeconds > 1) try { lastDump2 = DateTime.UtcNow; bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dev", "surface.png"), ImageFormat.Png); } catch { }
@@ -1700,7 +1700,7 @@ unsafe class Overlay : Form {
     int pollN;
     void Poll() {
         var p = pending; if (p != null) { pending = null; Relayout(p, false); }
-        if (Environment.GetEnvironmentVariable("TRAYGLASS_DEBUG") == "1" && ++pollN % 25 == 0) try { File.AppendAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dev", "poll.txt"), DateTime.Now.ToString("HH:mm:ss") + " model=" + (model != null) + " content=" + (content != null) + " gcov=" + (gcov != null) + " hidden=" + TaskbarHidden() + " fs=" + ForegroundIsFullscreen() + " shown=" + shown + " claude=" + ClaudeStatus.State + " media=" + (model != null && model.Media != null ? (model.Media.Playing ? "playing" : model.Media.Remote ? "remote" : model.Media.Paused ? "paused" : "none") : "-") + " mask=" + statusMask + " expand=" + expand.ToString("F2") + " win=" + winX + "," + winY + " " + winW + "x" + winH + " idle=" + idle + " produced=" + producedN + " composeMsTotal=" + (int)composeMs + " skipMsTotal=" + (int)skipMs + " animFrames=" + animFrames + " stages[cap,hash,blur,shadowclone,loop,content,push,-,relayout,geom,tables]=" + string.Join(",", Array.ConvertAll(stage, d => ((int)d).ToString())) + " lum=" + (int)lastLum + " mix=" + mix + " dark=" + darkContent + "\n"); } catch { }
+        if (Environment.GetEnvironmentVariable("WINDOWGLASS_DEBUG") == "1" && ++pollN % 25 == 0) try { File.AppendAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dev", "poll.txt"), DateTime.Now.ToString("HH:mm:ss") + " model=" + (model != null) + " content=" + (content != null) + " gcov=" + (gcov != null) + " hidden=" + TaskbarHidden() + " fs=" + ForegroundIsFullscreen() + " shown=" + shown + " claude=" + ClaudeStatus.State + " media=" + (model != null && model.Media != null ? (model.Media.Playing ? "playing" : model.Media.Remote ? "remote" : model.Media.Paused ? "paused" : "none") : "-") + " mask=" + statusMask + " expand=" + expand.ToString("F2") + " win=" + winX + "," + winY + " " + winW + "x" + winH + " idle=" + idle + " produced=" + producedN + " composeMsTotal=" + (int)composeMs + " skipMsTotal=" + (int)skipMs + " animFrames=" + animFrames + " stages[cap,hash,blur,shadowclone,loop,content,push,-,relayout,geom,tables]=" + string.Join(",", Array.ConvertAll(stage, d => ((int)d).ToString())) + " lum=" + (int)lastLum + " mix=" + mix + " dark=" + darkContent + "\n"); } catch { }
         if (model == null || content == null || gcov == null) return;
         bool nearTaskbar = !(cfg.Anchor ?? "").StartsWith("top");                       // only a bottom-anchored capsule collides with the taskbar
         bool want = enabled && (!nearTaskbar || TaskbarHidden()) && !(cfg.HideOnFullscreen && ForegroundIsFullscreen());
@@ -1718,7 +1718,7 @@ unsafe class Overlay : Form {
             Native.POINT cp2; Native.GetCursorPos(out cp2);
             bool ctrl = (Native.GetAsyncKeyState(0x11) & 0x8000) != 0;
             bool playing = model != null && model.Media != null && (model.Media.Playing || model.Media.Paused) && leftTo == 1;
-            bool forceInfo = Environment.GetEnvironmentVariable("TRAYGLASS_FORCEINFO") == "1" || (dbgAnim && File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dev", "forceinfo.flag")));
+            bool forceInfo = Environment.GetEnvironmentVariable("WINDOWGLASS_FORCEINFO") == "1" || (dbgAnim && File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dev", "forceinfo.flag")));
             int lx = cp2.X - (winX + M), ly = cp2.Y - (winY + M);
             bool inCapsule = lx >= 0 && lx < capW && ly >= 0 && ly < capH;
             bool overArt = forceInfo || (playing && !ctrl && !info && lx >= leftX && lx < leftX + leftW && ly >= 0 && ly < rowH);
@@ -1754,28 +1754,28 @@ static class Program {
         if (args.Length > 1 && args[0] == "--hook") {
             string json = ""; try { json = Console.In.ReadToEnd(); } catch { }
             try { ClaudeStatus.Record(args[1], json ?? ""); } catch { }
-            IntPtr hh = Native.FindWindow(null, "TrayGlass"); if (hh != IntPtr.Zero) Native.PostMessage(hh, 0x8000 + 8, IntPtr.Zero, IntPtr.Zero);
+            IntPtr hh = Native.FindWindow(null, "WindowGlass"); if (hh != IntPtr.Zero) Native.PostMessage(hh, 0x8000 + 8, IntPtr.Zero, IntPtr.Zero);
             return;
         }
         if (args.Length > 0 && (args[0] == "--stopwatch" || args[0] == "--timer")) {
-            IntPtr h = Native.FindWindow(null, "TrayGlass");
+            IntPtr h = Native.FindWindow(null, "WindowGlass");
             if (h == IntPtr.Zero) return;
-            File.AppendAllText(Path.Combine(dir, "TrayGlass.cmd"), string.Join(" ", args) + Environment.NewLine);
+            File.AppendAllText(Path.Combine(dir, "WindowGlass.cmd"), string.Join(" ", args) + Environment.NewLine);
             Native.PostMessage(h, 0x8000 + 7, IntPtr.Zero, IntPtr.Zero);
             return;
         }
         if (args.Length > 0 && args[0] == "--stop") {
-            IntPtr h = Native.FindWindow(null, "TrayGlass");
+            IntPtr h = Native.FindWindow(null, "WindowGlass");
             if (h != IntPtr.Zero) Native.PostMessage(h, 0x0010, IntPtr.Zero, IntPtr.Zero);
             return;
         }
-        bool created; var mutex = new Mutex(true, "Local\\TrayGlass", out created);
+        bool created; var mutex = new Mutex(true, "Local\\WindowGlass", out created);
         if (!created) return;
         Application.EnableVisualStyles();
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
         Application.ThreadException += (s2, e2) => LogCrash(e2.Exception);
         AppDomain.CurrentDomain.UnhandledException += (s2, e2) => LogCrash(e2.ExceptionObject as Exception);
-        Application.Run(new Overlay(Path.Combine(dir, "TrayGlass.ini")));
+        Application.Run(new Overlay(Path.Combine(dir, "WindowGlass.ini")));
         GC.KeepAlive(mutex);
     }
 }

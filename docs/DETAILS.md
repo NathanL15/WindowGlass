@@ -1,4 +1,4 @@
-# TrayGlass
+# WindowGlass
 
 A small floating liquid-glass capsule in the bottom-right corner showing the time and an Apple-style
 battery (percentage inside the body) while the auto-hide taskbar is hidden. Click-through; fades down
@@ -50,7 +50,7 @@ light or dark for contrast and blended with the text colour (`BarArtTint`, 0 = p
 The island only opens for audio that is actually rendered on this PC: Spotify keeps reporting "Playing" through the transport controls while it remote-controls another device, so the player's own audio session here must be active (within 1.5 s) and its meter must have shown signal (within 5 s). `MediaLocalOnly=0` turns that check off.
 
 Settings: `MediaIsland`, `MediaLocalOnly`, `ArtSize`, `BarWidth`, `BarGap`, `BarMaxHeight`, `BarCount`, `ExpandMs`, `BarArtTint`.
-Debug: `TRAYGLASS_FAKEMEDIA=1` fakes a playing session with generated art; `TRAYGLASS_NOMEDIA=1` ignores media; `TRAYGLASS_CAPTURABLE=1` lets screenshots see the capsule (the glass then captures itself); `TRAYGLASS_FORCEINFO=1` forces the media details open; `TRAYGLASS_CLAUDE_ONLY=<session id>` restricts the Claude indicator to one session (testing); `TRAYGLASS_FAKESTATUS=2|4|6` fakes the mic/camera dots.
+Debug: `WINDOWGLASS_FAKEMEDIA=1` fakes a playing session with generated art; `WINDOWGLASS_NOMEDIA=1` ignores media; `WINDOWGLASS_CAPTURABLE=1` lets screenshots see the capsule (the glass then captures itself); `WINDOWGLASS_FORCEINFO=1` forces the media details open; `WINDOWGLASS_CLAUDE_ONLY=<session id>` restricts the Claude indicator to one session (testing); `WINDOWGLASS_FAKESTATUS=2|4|6` fakes the mic/camera dots.
 
 ## Media details on hover
 
@@ -65,7 +65,7 @@ Settings: `MediaHover`, `HoverOpenMs`, `HoverCloseMs`, `DetailsHeight`, `CoverSi
 
 Pausing keeps the island open for `PauseHoldMs` (5 s) with the cover and bars dimmed to `PauseDim` (45%), then it
 animates away; resuming within that time just brightens it again. While the details are open the hold is
-suspended: the 5 seconds only start counting once you leave the expanded view. `TRAYGLASS_FAKEPAUSE=1` cycles a fake session
+suspended: the 5 seconds only start counting once you leave the expanded view. `WINDOWGLASS_FAKEPAUSE=1` cycles a fake session
 between playing and paused for testing.
 
 ## Status indicators
@@ -81,8 +81,8 @@ Where the status icons sit depends on what else is showing:
   minute after a turn ends is treated as idle, not as an alert. Idle sessions show
   nothing. It
   is fed by Claude Code hooks registered in `~/.claude/settings.json` for SessionStart, UserPromptSubmit, Stop,
-  SubagentStop, Notification and SessionEnd; each runs `TrayGlass.exe --hook <event>`, which reads the hook JSON
-  from stdin and records the session's state in `%LOCALAPPDATA%\TrayGlass\claude.txt`. Per-tool-call hooks
+  SubagentStop, Notification and SessionEnd; each runs `WindowGlass.exe --hook <event>`, which reads the hook JSON
+  from stdin and records the session's state in `%LOCALAPPDATA%\WindowGlass\claude.txt`. Per-tool-call hooks
   are deliberately not used (each hook launch costs ~100 ms). Working states expire after 30 minutes, attention
   after 4 hours, sessions after 8 hours. Settings: `ClaudeStatus`, `ClaudeColor`.
 - **Microphone / camera in use**: an orange dot while any app holds the microphone, a green one for the camera,
@@ -95,7 +95,7 @@ again after the alert, the session counts as working and the "!" clears.
 
 ## Stopwatch and timer
 
-TrayGlass has its own stopwatch and countdown timer (the Windows Clock app keeps its state private), shown
+WindowGlass has its own stopwatch and countdown timer (the Windows Clock app keeps its state private), shown
 Dynamic-Island style: a ring on the left (stopwatch: fills once per minute with a crown tick at the top;
 timer: soft orange, empties as time runs out) and a 3-digit readout on the right (`m:ss` under ten minutes,
 `mm:t` with tens of seconds from ten minutes, capped at 99:5). The timer wins over the stopwatch when both
@@ -105,25 +105,25 @@ plays `DoneSound` twice (`sounds	imer.wav`, a level-normalized copy of the calm 
 Control it three ways:
 - Hotkeys (`Hotkeys=1`): Ctrl+Alt+S start/pause (pauses and resumes a running timer too), Ctrl+Alt+Shift+S reset it, Ctrl+Alt+M set a timer.
 - Tray icon menu: Stopwatch start/pause (also the timer), Stopwatch reset, Timer (presets, custom, cancel).
-- Command line: `TrayGlass.exe --stopwatch start|pause|toggle|reset`, `TrayGlass.exe --timer 10` (minutes;
-  `90s`, `1.5h` also work), `TrayGlass.exe --timer off`.
+- Command line: `WindowGlass.exe --stopwatch start|pause|toggle|reset`, `WindowGlass.exe --timer 10` (minutes;
+  `90s`, `1.5h` also work), `WindowGlass.exe --timer off`.
 Settings: `TimerColor` + `TimerTint` (blend toward the accent, 0.6 = soft orange), `DoneSound`, `Hotkeys`, `SlotMs`, `DoneShowMs`.
 
 ## Run / stop
 
-- Starts at logon from `shell:startup\TrayGlass.lnk`.
-- `TrayGlass.exe --stop` exits a running instance. Right-click its icon in the hidden-icons flyout for
+- Starts at logon from `shell:startup\WindowGlass.lnk`.
+- `WindowGlass.exe --stop` exits a running instance. Right-click its icon in the hidden-icons flyout for
   Show overlay (toggle), stopwatch/timer controls, Reload config / Open config / Exit.
 - `build.cmd` rebuilds with the .NET Framework C# compiler (no SDK needed).
 - An unhandled exception no longer shows the .NET dialog: the stack is appended to `dev/crash.txt` and the
   overlay keeps running.
-- `TRAYGLASS_DEBUG=1` makes it dump the composed frame, the content layers (once a second) and a
+- `WINDOWGLASS_DEBUG=1` makes it dump the composed frame, the content layers (once a second) and a
   per-second state and timing log into `dev/`, plus a per-frame trace of every animation frame in
   `dev/anim.txt` (frame time and the cost of each stage). With it on, a file `dev/forceinfo.flag`
   forces the media details open, so an animation can be driven from a script (`dev/trace_info.ps1`,
   `dev/trace_run.ps1`).
 
-## Settings (TrayGlass.ini next to the exe, created by "Open config")
+## Settings (WindowGlass.ini next to the exe, created by "Open config")
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -179,7 +179,7 @@ Settings: `TimerColor` + `TimerTint` (blend toward the accent, 0.6 = soft orange
 - Dead ends on this build (26200): the accent-policy blur (`SetWindowCompositionAttribute`) renders a
   solid fill on every window type; the DWM system backdrop works but its acrylic tint is fixed and heavy
   (dark reads 84, light 211 whatever is behind) and window regions do not clip it.
-- Earlier variants in `dev/`: `TrayGlass_liquid_v1.cs` (timer-driven), `TrayGlass_blurglass.cs`
-  (plain blur + gradient), `TrayGlass_acrylic.cs` (DWM acrylic), `TrayGlass_replica.cs` (1:1 tray
+- Earlier variants in `dev/`: `WindowGlass_liquid_v1.cs` (timer-driven), `WindowGlass_blurglass.cs`
+  (plain blur + gradient), `WindowGlass_acrylic.cs` (DWM acrylic), `WindowGlass_replica.cs` (1:1 tray
   replica using the shell's private `Sysbatt.ttf`). `dev/backdrop.ps1` shows a scrolling colour test
   window under the capsule for checking the glass.
