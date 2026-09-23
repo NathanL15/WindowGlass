@@ -103,7 +103,8 @@ class Config {
     public bool HideOnFullscreen = true;
     public bool MediaIsland = true;        // expand with album art + audio bars while media plays
     public double Size = 1.0;              // overall size multiplier on top of the DPI scale
-    public bool SizeMatchPhysical = true;  // keep the capsule the same physical size on every screen (a 27" 1440p monitor at 100% would otherwise show it ~25% larger than the laptop panel)
+    public double SizeExternal = 0.9;      // extra multiplier on an external monitor (a display wider than 35 cm); the laptop panel gets Size alone
+    public bool SizeMatchPhysical = false; // instead: keep the capsule the same physical size on every screen by pixel density (made it too small for the owner's taste)
     public double SizeReference = 5.6;     // logical pixels per mm the sizes were designed on (the laptop panel: 2944 px / 302 mm at 175%)
     public bool MediaLocalOnly = true;     // ignore a player that is only remote-controlling another device (Spotify Connect): the app must be rendering audio here
     public double ArtSize = 19, BarWidth = 2.6, BarGap = 1.5, BarMaxHeight = 15, EdgePad = 6;   // DIP; EdgePad = art/bars distance from the capsule edge
@@ -193,6 +194,7 @@ class Config {
                     case "medialocalonly": c.MediaLocalOnly = Bool(v); break;
                     case "size": c.Size = Clamp(Dbl(v), 0.4, 2.5); break;
                     case "sizematchphysical": c.SizeMatchPhysical = Bool(v); break;
+                    case "sizeexternal": c.SizeExternal = Clamp(Dbl(v), 0.4, 2.5); break;
                     case "sizereference": c.SizeReference = Clamp(Dbl(v), 1, 20); break;
                     case "artsize": c.ArtSize = Dbl(v); break;
                     case "edgepad": c.EdgePad = Dbl(v); break;
@@ -286,7 +288,8 @@ class Config {
 "MediaIsland=1        # expand with album art + audio bars while media plays\r\n" +
 "MediaLocalOnly=1     # ignore a player that only remote-controls another device (Spotify Connect): it must play audio on this PC\r\n" +
 "Size=1.0             # overall size multiplier\r\n" +
-"SizeMatchPhysical=1  # same physical size on every screen (scaled by the monitor's pixel density relative to SizeReference)\r\n" +
+"SizeExternal=0.9     # extra multiplier on an external monitor (any display wider than 35 cm)\r\n" +
+"SizeMatchPhysical=0  # 1 = ignore SizeExternal and match physical size by pixel density instead (relative to SizeReference)\r\n" +
 "SizeReference=5.6    # logical px per mm the layout was designed on (the laptop panel); lower = bigger everywhere\r\n" +
 "ArtSize=19\r\n" +
 "BarWidth=2.6\r\n" +
@@ -962,13 +965,12 @@ unsafe class Overlay : Form {
     double Scale { get { return Native.GetDpiForWindow(Handle) / 96.0 * sizeFactor; } }
     void RefreshSizeFactor() {   // logical px per mm of the primary display vs the reference panel, clamped so a bad EDID cannot make it silly
         double f = cfg.Size;
-        if (cfg.SizeMatchPhysical) {
-            try {
-                IntPtr dc = Native.GetDC(IntPtr.Zero); int mm = Native.GetDeviceCaps(dc, 4), px = Native.GetDeviceCaps(dc, 8); Native.ReleaseDC(IntPtr.Zero, dc);
-                double dpi = Native.GetDpiForWindow(Handle) / 96.0;
-                if (mm > 50 && px > 100) f *= Math.Max(0.5, Math.Min(1.6, (px / (double)mm) / dpi / cfg.SizeReference));
-            } catch { }
-        }
+        try {
+            IntPtr dc = Native.GetDC(IntPtr.Zero); int mm = Native.GetDeviceCaps(dc, 4), px = Native.GetDeviceCaps(dc, 8); Native.ReleaseDC(IntPtr.Zero, dc);
+            double dpi = Native.GetDpiForWindow(Handle) / 96.0;
+            if (cfg.SizeMatchPhysical) { if (mm > 50 && px > 100) f *= Math.Max(0.5, Math.Min(1.6, (px / (double)mm) / dpi / cfg.SizeReference)); }
+            else if (mm > 350) f *= cfg.SizeExternal;   // wider than a laptop panel: an external monitor
+        } catch { }
         if (Math.Abs(f - sizeFactor) > 0.001) { sizeFactor = f; tKey = ""; geomKey = ""; digitsW = -1; }
     }
 
