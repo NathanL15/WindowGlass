@@ -774,6 +774,7 @@ unsafe class Overlay : Form {
     int rowH;                              // row-1 height in 1x px
     RectangleF coverRect; RectangleF[] btnRects = new RectangleF[3]; RectangleF progRect;   // 1x, capsule-relative (details layout)
     DateTime artHoverSince = DateTime.MinValue, artLeftAt = DateTime.MinValue; bool captureOn; int infoW; int hitZone;   // 0 none, 1 cover, 2 prev, 3 play/pause, 4 next
+    readonly float[] zoneA = new float[5]; int pressedZone;   // hover/press feedback per zone, eased
     const int WM_APP_CMD = 0x8000 + 7; double expand; float[] bands = new float[6]; int barsX, barsW, leftX, leftW; DateTime lastBands = DateTime.UtcNow;
     PrivateFontCollection fonts;
     void LoadFonts() {
@@ -839,7 +840,8 @@ unsafe class Overlay : Form {
         if (m.Msg == 0x8000 + 8) { ClaudeStatus.Refresh(); Wake(); return; }
         if (m.Msg == WM_APP_CMD) { try { if (File.Exists(cmdFile)) { foreach (var line in File.ReadAllLines(cmdFile)) Clocks.Apply(line); File.Delete(cmdFile); } } catch { } Wake(); return; }
         if (m.Msg == 0x84) { m.Result = captureOn ? (IntPtr)1 /*HTCLIENT*/ : (IntPtr)(-1); return; }
-        if (m.Msg == 0x0202 && captureOn) { int z = hitZone; new Thread(() => { if (z == 2) MediaSource.Prev(); else if (z == 4) MediaSource.Next(); else if (z == 1) MediaSource.OpenApp(); else MediaSource.TogglePlayPause(); }) { IsBackground = true }.Start(); return; }   // click: cover/play = toggle, prev, next
+        if (m.Msg == 0x0201 && captureOn) { pressedZone = hitZone; Wake(); return; }
+        if (m.Msg == 0x0202 && captureOn) { int z = hitZone; pressedZone = 0; new Thread(() => { if (z == 2) MediaSource.Prev(); else if (z == 4) MediaSource.Next(); else if (z == 1) MediaSource.OpenApp(); else MediaSource.TogglePlayPause(); }) { IsBackground = true }.Start(); return; }   // click: cover/play = toggle, prev, next
         if (m.Msg == 0x0205 && captureOn) { new Thread(() => MediaSource.Next()) { IsBackground = true }.Start(); return; }                      // right click: next track
         if (m.Msg == 0x0208 && captureOn) { new Thread(() => MediaSource.Prev()) { IsBackground = true }.Start(); return; }                      // middle click: previous
         if (m.Msg == 0x020A && captureOn) { int d = (short)((m.WParam.ToInt64() >> 16) & 0xFFFF); float step = 0.02f * (d / 120f); new Thread(() => MediaSource.VolumeStep(step)) { IsBackground = true }.Start(); return; }   // wheel: volume
@@ -1549,6 +1551,18 @@ unsafe class Overlay : Form {
         Mark(5);
         return true;
     }
+    void DrawHoverFeedback(Graphics g) {
+        if (infoE < 0.99) return; double s = Scale;
+        for (int z = 1; z < 5; z++) {
+            float a = zoneA[z]; if (a <= 0.01f) continue;
+            RectangleF r = z == 1 ? coverRect : btnRects[z - 2]; r.Offset(M, M);
+            float rad = z == 1 ? (float)(6 * s) : Math.Min(r.Width, r.Height) / 2f;
+            if (z != 1) r.Inflate(-(float)(2 * s), -(float)(2 * s));
+            var sm = g.SmoothingMode; g.SmoothingMode = SmoothingMode.HighQuality;
+            using (var path = Pill(r.X, r.Y, r.Width, r.Height, rad)) using (var b = new SolidBrush(Color.FromArgb((int)(a * 90), 0, 0, 0))) g.FillPath(b, path);
+            g.SmoothingMode = sm;
+        }
+    }
     void DrawContentAndBars() {
         using (var g = Graphics.FromImage(frame)) {
             if (expand > 0 && cfg.MediaIsland) DrawSlots(g);
@@ -1562,6 +1576,7 @@ unsafe class Overlay : Form {
                     g.DrawImage(contentDark, new Rectangle(M, M, contentDark.Width, contentDark.Height), 0, 0, contentDark.Width, contentDark.Height, GraphicsUnit.Pixel, ia);
                 }
             }
+            if (expand > 0 && cfg.MediaIsland) DrawHoverFeedback(g);   // on top of the cover and buttons, which live in the content layer
         }
     }
     void DrawSlots(Graphics g) {
@@ -1768,6 +1783,12 @@ unsafe class Overlay : Form {
                    if (!playing) { info = false; Wake(); } }
             hitZone = 0;
             if (info && infoE >= 0.99 && !ctrl && inCapsule) { if (coverRect.Contains(lx, ly)) hitZone = 1; else for (int i = 0; i < 3; i++) if (btnRects[i].Contains(lx, ly)) hitZone = 2 + i; }
+            if (hitZone == 0) pressedZone = 0;
+            {   // feedback: the hovered element dims a little, more while the button is held; ~80 ms ease
+                bool moved = false; float st = pollTimer.Interval / 80f;
+                for (int z = 1; z < 5; z++) { float tg = z == hitZone ? (pressedZone == z ? 1f : 0.5f) : 0f, a = zoneA[z]; if (a == tg) continue; a = a < tg ? Math.Min(tg, a + st) : Math.Max(tg, a - st); zoneA[z] = a; moved = true; }
+                if (moved) Wake();
+            }
             bool wantCapture = hitZone != 0;
             if (wantCapture != captureOn) { captureOn = wantCapture; int ex = Native.GetWindowLong(Handle, -20); Native.SetWindowLong(Handle, -20, wantCapture ? (ex & ~0x20) : (ex | 0x20)); }
         }
