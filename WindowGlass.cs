@@ -1784,8 +1784,8 @@ unsafe class Overlay : Form {
             hitZone = 0;
             if (info && infoE >= 0.99 && !ctrl && inCapsule) { if (coverRect.Contains(lx, ly)) hitZone = 1; else for (int i = 0; i < 3; i++) if (btnRects[i].Contains(lx, ly)) hitZone = 2 + i; }
             if (hitZone == 0) pressedZone = 0;
-            {   // feedback: the hovered element dims a little, more while the button is held; ~80 ms ease
-                bool moved = false; float st = pollTimer.Interval / 80f;
+            {   // feedback: the hovered element dims a little, more while the button is held; ~140 ms ease
+                bool moved = false; float st = pollTimer.Interval / 140f;
                 for (int z = 1; z < 5; z++) { float tg = z == hitZone ? (pressedZone == z ? 1f : 0.5f) : 0f, a = zoneA[z]; if (a == tg) continue; a = a < tg ? Math.Min(tg, a + st) : Math.Max(tg, a - st); zoneA[z] = a; moved = true; }
                 if (moved) Wake();
             }
