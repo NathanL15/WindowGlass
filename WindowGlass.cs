@@ -1561,9 +1561,15 @@ unsafe class Overlay : Form {
             else {   // shade the icon itself: the same shape drawn over it in translucent black
                 bool playing = model != null && model.Media != null && model.Media.Playing;
                 int kind = z == 2 ? 0 : z == 4 ? 3 : playing ? 2 : 1; float h = (float)((z == 3 ? 12.5 : 9.5) * s);
-                var pm = g.PixelOffsetMode; g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-                using (var b = new SolidBrush(Color.FromArgb((int)(a * 150), 0, 0, 0))) DrawTransport(g, b, kind, r.X + r.Width / 2f, r.Y + r.Height / 2f, h);
-                g.PixelOffsetMode = pm;
+                // the rounded shape is a stroke plus a fill; drawn translucent they would overlap and double up, so draw it opaque into a buffer and lay that over with one alpha
+                int bw = (int)Math.Ceiling(r.Width) + 2, bh = (int)Math.Ceiling(r.Height) + 2;
+                using (var buf = new Bitmap(bw, bh, PixelFormat.Format32bppPArgb)) {
+                    using (var gb = Graphics.FromImage(buf)) { gb.Clear(Color.Transparent); gb.SmoothingMode = SmoothingMode.HighQuality; gb.PixelOffsetMode = PixelOffsetMode.HighQuality; DrawTransport(gb, Brushes.Black, kind, bw / 2f, bh / 2f, h); }
+                    using (var ia = new ImageAttributes()) { var cm = new ColorMatrix(); cm.Matrix33 = a * 150f / 255f; ia.SetColorMatrix(cm);
+                        var im = g.InterpolationMode; g.InterpolationMode = InterpolationMode.NearestNeighbor; var po = g.PixelOffsetMode; g.PixelOffsetMode = PixelOffsetMode.Half;
+                        g.DrawImage(buf, new Rectangle((int)Math.Round(r.X + r.Width / 2f - bw / 2f), (int)Math.Round(r.Y + r.Height / 2f - bh / 2f), bw, bh), 0, 0, bw, bh, GraphicsUnit.Pixel, ia);
+                        g.InterpolationMode = im; g.PixelOffsetMode = po; }
+                }
             }
             g.SmoothingMode = sm;
         }
