@@ -159,7 +159,7 @@ Settings: `TimerColor` + `TimerTint` (blend toward the accent, 0.6 = soft orange
 | HideOnFullscreen | 1 | hide while a fullscreen app is in front |
 | MediaIsland | 1 | expand with album art + audio bars while media plays |
 | Size | 1.0 | overall size multiplier on top of the DPI scale |
-| SizeExternal | 1.0 | extra multiplier on an external monitor (any display wider than 35 cm); the laptop panel gets Size alone |
+| SizeExternal | 1.5 | extra multiplier on an external monitor (any display wider than 35 cm); the laptop panel gets Size alone |
 | SizeMatchPhysical | 0 | 1 = ignore SizeExternal and match physical size by pixel density instead, relative to SizeReference |
 | SizeReference | 5.6 | logical px per mm the layout was designed on (the laptop panel: 2944 px over 302 mm at 175%); lower makes it bigger everywhere |
 | MediaLocalOnly | 1 | ignore a player that only remote-controls another device (Spotify Connect): its audio session on this PC must be active and carrying signal |
