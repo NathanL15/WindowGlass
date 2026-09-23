@@ -1565,7 +1565,7 @@ unsafe class Overlay : Form {
                 int bw = (int)Math.Ceiling(r.Width) + 2, bh = (int)Math.Ceiling(r.Height) + 2;
                 using (var buf = new Bitmap(bw, bh, PixelFormat.Format32bppPArgb)) {
                     using (var gb = Graphics.FromImage(buf)) { gb.Clear(Color.Transparent); gb.SmoothingMode = SmoothingMode.HighQuality; gb.PixelOffsetMode = PixelOffsetMode.HighQuality; DrawTransport(gb, Brushes.Black, kind, bw / 2f, bh / 2f, h); }
-                    using (var ia = new ImageAttributes()) { var cm = new ColorMatrix(); cm.Matrix33 = a * 150f / 255f; ia.SetColorMatrix(cm);
+                    using (var ia = new ImageAttributes()) { var cm = new ColorMatrix(); cm.Matrix33 = a * 80f / 255f; ia.SetColorMatrix(cm);
                         var im = g.InterpolationMode; g.InterpolationMode = InterpolationMode.NearestNeighbor; var po = g.PixelOffsetMode; g.PixelOffsetMode = PixelOffsetMode.Half;
                         g.DrawImage(buf, new Rectangle((int)Math.Round(r.X + r.Width / 2f - bw / 2f), (int)Math.Round(r.Y + r.Height / 2f - bh / 2f), bw, bh), 0, 0, bw, bh, GraphicsUnit.Pixel, ia);
                         g.InterpolationMode = im; g.PixelOffsetMode = po; }
