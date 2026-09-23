@@ -103,7 +103,7 @@ class Config {
     public bool HideOnFullscreen = true;
     public bool MediaIsland = true;        // expand with album art + audio bars while media plays
     public double Size = 1.0;              // overall size multiplier on top of the DPI scale
-    public double SizeExternal = 0.9;      // extra multiplier on an external monitor (a display wider than 35 cm); the laptop panel gets Size alone
+    public double SizeExternal = 1.0;      // extra multiplier on an external monitor (a display wider than 35 cm); the laptop panel gets Size alone
     public bool SizeMatchPhysical = false; // instead: keep the capsule the same physical size on every screen by pixel density (made it too small for the owner's taste)
     public double SizeReference = 5.6;     // logical pixels per mm the sizes were designed on (the laptop panel: 2944 px / 302 mm at 175%)
     public bool MediaLocalOnly = true;     // ignore a player that is only remote-controlling another device (Spotify Connect): the app must be rendering audio here
@@ -288,7 +288,7 @@ class Config {
 "MediaIsland=1        # expand with album art + audio bars while media plays\r\n" +
 "MediaLocalOnly=1     # ignore a player that only remote-controls another device (Spotify Connect): it must play audio on this PC\r\n" +
 "Size=1.0             # overall size multiplier\r\n" +
-"SizeExternal=0.9     # extra multiplier on an external monitor (any display wider than 35 cm)\r\n" +
+"SizeExternal=1.0     # extra multiplier on an external monitor (any display wider than 35 cm)\r\n" +
 "SizeMatchPhysical=0  # 1 = ignore SizeExternal and match physical size by pixel density instead (relative to SizeReference)\r\n" +
 "SizeReference=5.6    # logical px per mm the layout was designed on (the laptop panel); lower = bigger everywhere\r\n" +
 "ArtSize=19\r\n" +
