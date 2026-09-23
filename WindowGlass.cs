@@ -1556,10 +1556,15 @@ unsafe class Overlay : Form {
         for (int z = 1; z < 5; z++) {
             float a = zoneA[z]; if (a <= 0.01f) continue;
             RectangleF r = z == 1 ? coverRect : btnRects[z - 2]; r.Offset(M, M);
-            float rad = z == 1 ? (float)(6 * s) : Math.Min(r.Width, r.Height) / 2f;
-            if (z != 1) r.Inflate(-(float)(2 * s), -(float)(2 * s));
             var sm = g.SmoothingMode; g.SmoothingMode = SmoothingMode.HighQuality;
-            using (var path = Pill(r.X, r.Y, r.Width, r.Height, rad)) using (var b = new SolidBrush(Color.FromArgb((int)(a * 90), 0, 0, 0))) g.FillPath(b, path);
+            if (z == 1) { using (var path = Pill(r.X, r.Y, r.Width, r.Height, (float)(6 * s))) using (var b = new SolidBrush(Color.FromArgb((int)(a * 90), 0, 0, 0))) g.FillPath(b, path); }
+            else {   // shade the icon itself: the same shape drawn over it in translucent black
+                bool playing = model != null && model.Media != null && model.Media.Playing;
+                int kind = z == 2 ? 0 : z == 4 ? 3 : playing ? 2 : 1; float h = (float)((z == 3 ? 12.5 : 9.5) * s);
+                var pm = g.PixelOffsetMode; g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                using (var b = new SolidBrush(Color.FromArgb((int)(a * 150), 0, 0, 0))) DrawTransport(g, b, kind, r.X + r.Width / 2f, r.Y + r.Height / 2f, h);
+                g.PixelOffsetMode = pm;
+            }
             g.SmoothingMode = sm;
         }
     }
