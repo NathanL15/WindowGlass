@@ -119,7 +119,7 @@ class Config {
     public bool Hotkeys = true;            // Ctrl+Alt+S stopwatch start/pause, Ctrl+Alt+Shift+S reset, Ctrl+Alt+M timer
     public int SlotMs = 220;               // slot transition (art<->ring, bars<->digits)
     public bool MediaHover = true;         // hovering the album art opens title/artist/progress; the art then takes clicks
-    public int HoverOpenMs = 200;          // dwell on the art before it opens
+    public int HoverOpenMs = 350;          // dwell on the art before it opens
     public int HoverCloseMs = 250;         // grace after leaving before it closes
     public double InfoMaxWidth = 150;      // DIP; (unused by the downward layout, kept for old configs)
     public double DetailsHeight = 78;      // DIP; the second row that opens under the capsule
@@ -305,7 +305,7 @@ class Config {
 "TimerTint=0.6        # how far the timer leans toward TimerColor (0 = text colour)\r\n" +
 "SlotMs=220           # slot transition time\r\n" +
 "MediaHover=1         # hover the album art: title/artist/progress, click = play/pause, wheel = volume; hold Ctrl to click through\r\n" +
-"HoverOpenMs=200\r\n" +
+"HoverOpenMs=350\r\n" +
 "HoverCloseMs=250\r\n" +
 "DetailsHeight=78     # DIP, second row under the capsule\r\n" +
 "CoverSize=54         # DIP, enlarged cover in the second row\r\n" +
