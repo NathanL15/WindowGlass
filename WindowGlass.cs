@@ -33,6 +33,8 @@ static class Native {
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int hh, uint f);
     [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr h);
+    [DllImport("user32.dll")] public static extern IntPtr MonitorFromPoint(POINT p, uint flags);
+    [DllImport("shcore.dll")] public static extern int GetDpiForMonitor(IntPtr mon, int type, out uint dx, out uint dy);
     [DllImport("gdi32.dll")] public static extern int GetDeviceCaps(IntPtr dc, int index);
     [DllImport("user32.dll")] public static extern bool SetWindowDisplayAffinity(IntPtr h, uint a);
     [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr h);
@@ -835,7 +837,20 @@ unsafe class Overlay : Form {
         cp.ExStyle |= 0x08000000 /*NOACTIVATE*/ | 0x80 /*TOOLWINDOW*/ | 0x80000 /*LAYERED*/ | 0x20 /*TRANSPARENT: mouse falls through*/;
         return cp; } }
     protected override bool ShowWithoutActivation { get { return true; } }
+    System.Windows.Forms.Timer displayTimer;
+    void OnDisplayChanged() {   // WM_DISPLAYCHANGE / WM_DPICHANGED / settings change: monitors take a moment to settle, then rebuild at the new scale
+        if (displayTimer == null) { displayTimer = new System.Windows.Forms.Timer { Interval = 600 }; displayTimer.Tick += (s2, e2) => { displayTimer.Stop(); ForceRelayout(); }; }
+        displayTimer.Stop(); displayTimer.Start();
+    }
+    void ForceRelayout() {
+        var m = model; if (m == null) return;
+        screenW = Screen.PrimaryScreen.Bounds.Width; screenH = Screen.PrimaryScreen.Bounds.Height; RefreshSizeFactor();
+        lastHash = 0; cbg = null;
+        lock (sync) { try { RenderContent(); } catch { } }
+        dirty = true; Wake();
+    }
     protected override void WndProc(ref Message m) {
+        if (m.Msg == 0x007E || m.Msg == 0x02E0 || m.Msg == 0x001A) { OnDisplayChanged(); }   // WM_DISPLAYCHANGE, WM_DPICHANGED, WM_SETTINGCHANGE (fall through to the default handling)
         if (m.Msg == 0x0312) { int id = m.WParam.ToInt32(); if (id == 1) Clocks.StopwatchToggle(); else if (id == 2) Clocks.StopwatchReset(); else if (id == 3) AskTimer(); Wake(); return; }   // WM_HOTKEY
         if (m.Msg == 0x8000 + 8) { ClaudeStatus.Refresh(); Wake(); return; }
         if (m.Msg == WM_APP_CMD) { try { if (File.Exists(cmdFile)) { foreach (var line in File.ReadAllLines(cmdFile)) Clocks.Apply(line); File.Delete(cmdFile); } } catch { } Wake(); return; }
@@ -981,23 +996,31 @@ unsafe class Overlay : Form {
     }
 
     double sizeFactor = 1.0;
-    double Scale { get { return Native.GetDpiForWindow(Handle) / 96.0 * sizeFactor; } }
+    double dpiScale = 0;
+    double Scale { get { if (dpiScale <= 0) dpiScale = PrimaryDpi(); return dpiScale * sizeFactor; } }
+    double PrimaryDpi() {   // the primary monitor's effective DPI (the window's own DPI lags behind when the primary display changes)
+        try {
+            var b = Screen.PrimaryScreen.Bounds; IntPtr mon = Native.MonitorFromPoint(new Native.POINT { X = b.X + b.Width / 2, Y = b.Y + b.Height / 2 }, 1);
+            uint dx, dy; if (mon != IntPtr.Zero && Native.GetDpiForMonitor(mon, 0, out dx, out dy) == 0 && dx > 0) return dx / 96.0;
+        } catch { }
+        try { return Native.GetDpiForWindow(Handle) / 96.0; } catch { return 1.0; }
+    }
     void RefreshSizeFactor() {   // logical px per mm of the primary display vs the reference panel, clamped so a bad EDID cannot make it silly
-        double f = cfg.Size;
+        double f = cfg.Size; double dpiNow = PrimaryDpi();
         try {
             IntPtr dc = Native.GetDC(IntPtr.Zero); int mm = Native.GetDeviceCaps(dc, 4), px = Native.GetDeviceCaps(dc, 8); Native.ReleaseDC(IntPtr.Zero, dc);
-            double dpi = Native.GetDpiForWindow(Handle) / 96.0;
+            double dpi = dpiNow;
             if (cfg.SizeMatchPhysical) { if (mm > 50 && px > 100) f *= Math.Max(0.5, Math.Min(1.6, (px / (double)mm) / dpi / cfg.SizeReference)); }
             else if (mm > 350) f *= cfg.SizeExternal;   // wider than a laptop panel: an external monitor
         } catch { }
-        if (Math.Abs(f - sizeFactor) > 0.001) { sizeFactor = f; tKey = ""; geomKey = ""; digitsW = -1; }
+        if (Math.Abs(f - sizeFactor) > 0.001 || Math.Abs(dpiNow - dpiScale) > 0.001) { sizeFactor = f; dpiScale = dpiNow; tKey = ""; geomKey = ""; digitsW = -1; }
     }
 
     void Relayout(Model m, bool force) {
         bool same = !force && m.SameAs(model);
         model = m; if (same) return;
         screenW = Screen.PrimaryScreen.Bounds.Width; screenH = Screen.PrimaryScreen.Bounds.Height; RefreshSizeFactor();
-        if (animatingExpand) { Wake(); return; }   // mid-animation: the next animation frame re-lays out anyway; no double render under the lock
+        if (animatingExpand) { needRelayout = true; Wake(); return; }   // mid-animation: the next animation frame re-lays out (needRelayout guarantees one more frame even if the animation just ended)
         lock (sync) RenderContent();
         Wake();
     }
@@ -1765,8 +1788,13 @@ unsafe class Overlay : Form {
     }
 
     int pollN;
+    int dispPollN;
     void Poll() {
         var p = pending; if (p != null) { pending = null; Relayout(p, false); }
+        if (++dispPollN % 80 == 0) {   // every ~2 s: catch a primary-display or DPI change that arrived without a message
+            var b = Screen.PrimaryScreen.Bounds; double d = PrimaryDpi();
+            if (model != null && (b.Width != screenW || b.Height != screenH || Math.Abs(d - dpiScale) > 0.001)) ForceRelayout();
+        }
         if (Environment.GetEnvironmentVariable("WINDOWGLASS_DEBUG") == "1" && ++pollN % 25 == 0) try { File.AppendAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dev", "poll.txt"), DateTime.Now.ToString("HH:mm:ss") + " model=" + (model != null) + " content=" + (content != null) + " gcov=" + (gcov != null) + " hidden=" + TaskbarHidden() + " fs=" + ForegroundIsFullscreen() + " shown=" + shown + " claude=" + ClaudeStatus.State + " media=" + (model != null && model.Media != null ? (model.Media.Playing ? "playing" : model.Media.Remote ? "remote" : model.Media.Paused ? "paused" : "none") : "-") + " mask=" + statusMask + " expand=" + expand.ToString("F2") + " win=" + winX + "," + winY + " " + winW + "x" + winH + " idle=" + idle + " produced=" + producedN + " composeMsTotal=" + (int)composeMs + " skipMsTotal=" + (int)skipMs + " animFrames=" + animFrames + " stages[cap,hash,blur,shadowclone,loop,content,push,-,relayout,geom,tables]=" + string.Join(",", Array.ConvertAll(stage, d => ((int)d).ToString())) + " lum=" + (int)lastLum + " mix=" + mix + " dark=" + darkContent + "\n"); } catch { }
         if (model == null || content == null || gcov == null) return;
         bool nearTaskbar = !(cfg.Anchor ?? "").StartsWith("top");                       // only a bottom-anchored capsule collides with the taskbar
